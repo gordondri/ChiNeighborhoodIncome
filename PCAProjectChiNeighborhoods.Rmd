@@ -1,0 +1,377 @@
+---
+title: "Presentation"
+author: "Gordon Dri"
+date: "December 4, 2016"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Priniciple Component Analysis Tutorial:
+
+- The data set shows Per Capita Income of 77 neighborhoods in Chicago
+- There are 31 predictor varaibles available
+- The predictor variables have been combined from two public datasets from the City of Chicago's Data Portal:
+  1. "Census Data - Selected socioeconomic indicators in Chicago, 2008 - 2012" (https://data.cityofchicago.org/Health-Human-Services/Census-Data-Selected-socioeconomic-indicators-in-C/kn9c-c2s2)
+  2. "Public Health Statistics- Selected public health indicators by Chicago community" (https://data.cityofchicago.org/Health-Human-Services/Public-Health-Statistics-Selected-public-health-in/iqnk-2tcu)
+  
+Part A: Load in Data and Data Preparation
+```{r part a}
+# set the working directory to the file path in which the data sets are stored
+datapath <- "C:/Users/Mary/Downloads"
+
+# dataset 1: public health indicators by Chicago community 
+public.health.indicators <- read.csv(file=paste(datapath,
+"Public_health_indicators_by_Chicago_community_area.csv", sep="/"), header=TRUE, sep=",", 
+stringsAsFactors = FALSE)
+
+# dataset 2: socioeconomic indicators by Chicago community 
+socioeconomic.indicators <- read.csv(file=paste(datapath,  "Socioeconomic_indicators_in_Chicago_2008_2012.csv",sep="/"), header=TRUE, sep=",",
+stringsAsFactors = FALSE)
+
+# combine the two datasets, don't repeat redundant columns
+
+# compare the number of rows in both datasets
+nrow(public.health.indicators) > nrow(socioeconomic.indicators)
+
+# check the end of the socioeconomic indicators dataset
+tail(socioeconomic.indicators)
+
+# remove the last row of this table to ensure both tables have equal number of rows
+socioeconomic.indicators <- socioeconomic.indicators[1:77, ]
+
+# check the first two column headers of both datasets for potential discrepancies 
+colnames(public.health.indicators)[1:2]
+colnames(socioeconomic.indicators)[1:2]
+
+# make these headers the same in both datasets
+colnames(socioeconomic.indicators)[1:2] <- colnames(public.health.indicators)[1:2]
+
+# check the column headers
+colnames(public.health.indicators)[1:2] == 
+colnames(socioeconomic.indicators)[1:2]
+
+# do the same for per capita income
+col.index.public <- which(colnames(public.health.indicators) == 'Per.Capita.Income')
+
+col.index.socio <- which(colnames(socioeconomic.indicators) == 'PER.CAPITA.INCOME')
+
+colnames(socioeconomic.indicators)[col.index.socio] <- colnames(public.health.indicators)[col.index.public]
+
+colnames(public.health.indicators)
+colnames(socioeconomic.indicators)
+
+# merge the two datasets
+combined.data <- merge(public.health.indicators, 
+                       socioeconomic.indicators,
+                       all = TRUE)
+
+# check the combined dataset 
+colnames(combined.data)
+head(combined.data)
+
+# we see that the two datasets are using different per capita incomes for each Chicago community
+cbind(Dataset1.Income.Per.Capita = public.health.indicators[1:10, 'Per.Capita.Income'],
+Dataset2.Income.Per.Capita = socioeconomic.indicators[1:10, 'Per.Capita.Income'])
+
+# merge the two datasets using only community area and community area name
+combined.data <- merge(public.health.indicators, 
+                       socioeconomic.indicators,
+                       by = c('Community.Area',                                           'Community.Area.Name'))
+nrow(combined.data)
+nrow(public.health.indicators)
+nrow(socioeconomic.indicators)
+# we see that the combined data set now has 75 rows instead of 77 which means that not all of the community area and/or community area names are the same in both datasets
+
+# check the 1st column for differences
+public.health.indicators[,1] == socioeconomic.indicators[,1]
+
+# check the 2nd column for differences
+public.health.indicators[,2] == socioeconomic.indicators[,2]
+
+equalities <- (public.health.indicators[,2] == socioeconomic.indicators[,2])
+
+# analyze the community area names that are different in the two data sets
+cbind(public.health.indicators[!equalities,2], 
+      socioeconomic.indicators[!equalities,2])
+
+# reconcile the differences
+socioeconomic.indicators[!equalities,2] <- public.health.indicators[!equalities,2]
+
+# check the 2nd column for differences
+public.health.indicators[,2] == socioeconomic.indicators[,2]
+
+# merge the two datasets using only community area and community area name
+combined.data <- merge(public.health.indicators, 
+                       socioeconomic.indicators,
+                       by = c('Community.Area',                             'Community.Area.Name'))
+
+colnames(combined.data)
+
+# delete one column of per capita income and keep the other
+combined.data <- combined.data[,-which(colnames(combined.data) == 'Per.Capita.Income.y')]
+
+colnames(combined.data)
+
+# look for any missing values in the data
+row.has.na <- apply(combined.data, 1, function(x){any(is.na(x))})
+
+combined.data[row.has.na, ]
+
+# replace missing values in the data 
+
+# remove the 'Gonorrhea in Females' and 'Gonorrhea in Males' columns since they have many missing values
+combined.data <- combined.data[,-c(which(colnames(combined.data) == 'Gonorrhea.in.Females'),which(colnames(combined.data) == 'Gonorrhea.in.Males'))]
+
+# look for any additional missing values in the data
+row.has.na <- apply(combined.data, 1, function(x){any(is.na(x))})
+combined.data[row.has.na, ]
+
+# replace the remaining missing values with column means
+
+# find the index(es) at which there are NA values
+indx <- which(is.na(combined.data), arr.ind=TRUE); indx
+
+# change NA values to 0
+combined.data[is.na(combined.data)] <- 0
+# change the columns to numeric
+combined.data[3:ncol(combined.data)] <- sapply(combined.data[,3:ncol(combined.data)], as.numeric)
+# find columns means
+cM <- colMeans(combined.data[3:ncol(combined.data)], na.rm=TRUE)
+# replace the index(es) with their column mean(s). Subtract 2 to the columns from indx since we only calculated column means starting at the 3rd columns
+combined.data[indx] <- cM[(indx[,2] - 2)]
+
+```
+Part B: View the data
+```{r Part B}
+head(combined.data)
+colnames(combined.data)
+summary(combined.data)
+
+# define the 31 predictors. Remove the first two columns as they pertain to the community names and remove the output value (per.capita.income)
+dataPredictors <- combined.data[, -c(1, 2, 26)]
+
+# view the correlation matrix of the predictors
+round(cor(dataPredictors), digits = 2)
+```
+Part C: Linear Model Analysis
+```{r Part C}
+# get all the input variable names
+myScope <- names(combined.data)[-which(names(combined.data)=="Per.Capita.Income.x")]
+myScope <- myScope[3:length(myScope)]
+
+linMod <- lm(Per.Capita.Income.x~.,data=combined.data[,3:ncol(combined.data)])
+summary(linMod)
+```
+Observations from the Linear Model Summary:
+- 8 non-intercept parameters significant at alpha level of 0.1 or less
+- Multiple R-squared value of 0.8948 is higher than the adjusted R-squared value of 0.8262 which suggests we have unnecessary predictors in our model 
+- The F-statistic of 13.04 is significant with a very low p-value, meaning that at least one non-intercept parameter is non-zero (we must reject our null hypothesis)
+
+Use `drop1()` to decide if any predictors need to be removed
+```{r Part C 2}
+drop1(linMod)
+```
+We can remove the predictor 'Teen.Birth.Rate' since it reduces the AIC of the model 
+```{r Part C 3}
+# remove 'Teen.Birth.Rate' from the predictors 
+col_range <- rep(3:ncol(combined.data))
+col_range <- col_range[-(which(colnames(combined.data) == 'Teen.Birth.Rate')-2)]
+# re-run the linear model 
+linMod <- lm(Per.Capita.Income.x~.,data=combined.data[,col_range])
+summary(linMod)
+```
+By removing this predictor, we have effectively reduced the difference between the multiple R-squared and adjusted R-squared, thereby using less predictors to explain the output 
+
+Use `drop1()` again to see if any other predictors can be removed
+```{r Part C 2}
+drop1(linMod)
+```
+- At this point, we could drop 'Assualt.Homocide', 'Firearm.Related',
+'Crowded.Housing', or 'Dependency'
+
+Part D: Selection of Predictors based on PCA
+```{r Part D}
+# separate output from inputs 
+Data.Output<-combined.data$Per.Capita.Income.x
+Data.Input<-data.matrix(dataPredictors,rownames.force="automatic")
+dim(Data.Input)
+
+# explore the dimensionality of a set of three input variables
+colnames(Data.Input)
+Combined.data.1.2.3<-Data.Input[,c(6,7,12)]
+pairs(Combined.data.1.2.3)
+
+# perform PCA by manually calculating factors, loadings and analyzing the importance of factors 
+
+# calculate 3 factor loadings using manual method based on eigen-decomposition
+
+# STEP 1: create a centered matrix
+centered.matrix <- dataPredictors
+col.means <- colMeans(dataPredictors)
+for (i in 1:ncol(dataPredictors)){
+  centered.matrix[,i] <- dataPredictors[,i] -                               col.means[i]
+}
+
+# STEP 2: calculate the covariance matrix 
+cov.matrix <- cov(centered.matrix)
+
+# STEP 3: perform eigenvalue decomposition of the covariance matrix 
+eigens <- eigen(cov.matrix)
+eigen.vecs <- eigens$vectors
+eigen.vals <- eigens$values
+
+# plot the normalized eigen values
+barplot(eigen.vals/sum(eigen.vals),width=2,col = "black", ylim = c(0, 1), names.arg = rep(1:30), xlab='Predictors')
+
+# Define the L matrix as having columns corresponding to the eigenvectors with the 3 largest eigenvalues of the covariance matrix
+L.matrix <- eigen.vecs
+
+# plot the loadings
+matplot(L.matrix[,1:3],type="l",lty=1,col=c("black","red","green"),lwd=3,xlab='Predictors',ylab='Loadings')
+# QUESTION: 'interpret the factors by looking at the shapes of the loadings' (look at the shapes of the loadings and tell what mode of curve move corresponds to each factor)
+
+# Define the F matrix by multiplying the centered matrix by the L matrix
+F.matrix <- as.matrix(centered.matrix) %*%
+  L.matrix
+
+# calculate and plot 3 selected factors
+matplot(F.matrix[,1:3],type="l",col=c("black","red","green"),lty=1,lwd=3, xlab='Chicago Neighborhoods', ylab='Factors')
+
+# compare factors 
+plot(F.matrix[,1],F.matrix[,2],type="l",lwd=2)
+
+# analyze the adjustments that each factor makes to the curve (output variable). 
+# each of the factors makes an adjustment corresponding to the shape of its loading
+# look at the shapes of the loadings and tell what mode of curve move corresponds to each factor 
+OldCurve<-Data.Input[16,]
+NewCurve<-Data.Input[17,]
+CurveChange<-NewCurve-OldCurve
+FactorsChange<-F.matrix[17,]-F.matrix[16,]
+ModelCurveAdjustment.1Factor<-OldCurve+t(L.matrix[,1])*FactorsChange[1]
+ModelCurveAdjustment.2Factors<-OldCurve+t(L.matrix[,1])*FactorsChange[1]+t(L.matrix[,2])*FactorsChange[2]
+ModelCurveAdjustment.3Factors<-OldCurve+t(L.matrix[,1])*FactorsChange[1]+t(L.matrix[,2])*FactorsChange[2]+
+  t(L.matrix[,3])*FactorsChange[3]
+
+# 1 factor adjustment
+matplot(t(rbind(OldCurve,NewCurve,ModelCurveAdjustment.1Factor)),type="l",col=c("black","red","green"),lwd=3,ylab="Curve Adjustment")
+legend(x="topright",c("Old Curve","New Curve","1-Factor Adj."),lty=c(1,1,2),lwd=1,col=c("black","red","green"),cex = 0.75)
+
+# 2 factor adjustment
+matplot(t(rbind(OldCurve,NewCurve,ModelCurveAdjustment.1Factor,ModelCurveAdjustment.2Factors)),type="l",col=c("black","red","green","blue"),lwd=3,ylab="Curve Adjustment")
+legend(x="topright",c("Old Curve","New Curve","1-Factor Adj.","2-Factor Adj."),lty=c(1,1,2),lwd=1,col=c("black","red","green","blue"),cex = 0.75)
+
+# check how well the curve change was estimated by 2 factors 
+rbind(CurveChange,ModelCurveAdjustment.2Factors-OldCurve)
+
+# QUESTION: explain how shapes of the loadings affect the adjustments using only factor 1 and factors 1 and 2
+
+# estimate all the values for the 4th column (prenatal) using three terms of factors and loadings 
+Model.Prenatal<-col.means[4]+L.matrix[4,1]*F.matrix[,1]+L.matrix[4,2]*F.matrix[,2]+L.matrix[4,3]*F.matrix[,3]
+matplot(cbind(Data.Input[,4],Model.Prenatal),type="l",lty=1,lwd=c(3,1),col=c("black","red"),ylab="Prenatal Care in 1st Trim.")
+
+# run PCA on predictors
+dataPredictors.PCA <- princomp(dataPredictors)
+
+# explore the PCA object
+names(dataPredictors.PCA)
+
+# plot the principle components
+plot(dataPredictors.PCA)
+
+# look at the variance of the predictors explained by each priniciple component
+dataPredictors.PCA$sdev^2
+
+# plot the normalized variances explained by each component
+barplot(dataPredictors.PCA$sdev^2/sum(dataPredictors.PCA$sdev^2),ylim=c(0,1))
+
+# evaluate the cumulative variance explained by including 1, 2, 3, 4 and 5 components 
+cumsum(dataPredictors.PCA$sdev^2/sum(dataPredictors.PCA$sdev^2))
+# we must make a decision of how many components to use based on our desired r^2 value 
+
+# interpret factor loadings 
+dataPredictors.Loadings<-dataPredictors.PCA$loadings
+dataPredictors.Loadings[,1:5]
+
+# compare the eigen vectors with the loadings obtained from PCA
+Project.Data.PCA.Eigen.Loadings <- cbind(eigen.vecs[,1:3], dataPredictors.PCA$loadings[,1:3])
+colnames(Project.Data.PCA.Eigen.Loadings) <- c('L1.eigen', 'L2.eigen', 'L3.eigen', 'L1.PCA', 'L2.PCA', 'L3.PCA')
+
+Project.Data.PCA.Eigen.Loadings
+
+# plot loadings
+matplot(1:30,dataPredictors.PCA$loadings[,1:5],type="l",lty=1,lwd=2,xaxt="n",xlab="Predictor",ylab="Factor Loadings",col=c("black","red","blue","green","cyan"))
+abline(h=0)
+axis(1, 1:31,labels=colnames(dataPredictors))
+legend("bottomleft",legend=c("L1","L2","L3","L4","L5"),lty=1,lwd=2,cex=.4,col=c("black","red","blue","green","cyan"))
+
+# create a new data frame with principal components as predictors
+dataPCAFactors<-dataPredictors.PCA$scores
+dataRotated<-as.data.frame(cbind(Output=combined.data$Per.Capita.Income.x,dataPCAFactors))
+
+# look at the factors (scores)
+matplot(dataPredictors.PCA$scores[,1:3],type="l",lty=1,lwd=2)
+
+# compare the F.matrix with the factors/scores obtained from PCA
+F.matrix.PCA <- dataPredictors.PCA$scores[,1:3]
+Project.Data.PCA.Eigen.Factors <- cbind(F.matrix, F.matrix.PCA)
+colnames(Project.Data.PCA.Eigen.Factors) <- c('F.1', 'F.2', 'F.3', 'F1.PCA', 'F2.PCA', 'F3.PCA')
+
+Project.Data.PCA.Eigen.Factors
+
+# compare coefficients with factor loadings
+
+# look at the intercepts and slopes for each predictor on the output (per.capita.income)
+coeff.check <- t(apply(Data.Input, 2, function(Data.Input.col) lm(Data.Input.col~Data.Output)$coef))
+
+# show that the intercepts and slopes above are the same as zero loading and the first loading, respectively
+compare.coeff <- cbind(PCA.intercepts = dataPredictors.PCA$center,LinMod.intercepts = coeff.check[,1], PCA.slopes = dataPredictors.PCA$loadings[,1], LinMod.slopes = coeff.check[,2])
+
+# look at the relationships of factors and the column response. This looks at the correlation (r^2) of each column with the response column
+(rSqrCorrelations<-apply(dataPredictors.PCA$scores,2,cor,combined.data$Per.Capita.Income.x)^2)
+
+sum(rSqrCorrelations)
+# this is the same r^2 as in the summary of the linear model
+
+# fit a linear model with the PCA factors as predictors
+linModPCA <- lm(Output ~ ., data =dataRotated)
+summary(linModPCA)
+
+# calculate relative importance measures for the PCA factors
+suppressMessages(library(relaimpo))
+metrics.data.pca <- calc.relimp(linModPCA, type = c("first", "last"))
+metrics.data.pca
+
+# sum the variances explained by each component to get the total variance explained by the model
+sum(metrics.data.pca@first)
+
+metrics.data.pca@first.rank
+
+# re-order the components from high importance to low importance
+orderComponents <- order(PCA.rank)
+
+# fit the sequence of linear models
+dataRotatedReordered<-dataRotated[,c(1,orderComponents+1)]
+(nestedRSquared<-sapply(2:31,function(z) summary(lm(Output~.,data=dataRotatedReordered[,1:z]))$r.squared))
+
+# plot the r^2 values
+matplot(1:30, nestedRSquared,type="b",xlab="Number of Variables",ylab="R.Squared",lty=1,lwd=2,pch=16)
+legend("bottomright",legend="nestedRSquared",lty=1,lwd=1,col="black")
+```
+Part E: Restoring slopes for Original Predictors
+
+```{r E}
+# retrieve the order that the principle components should be in based on the relative importance measures (i.e highest variance explained to lowest)
+(PCA.rank<-metrics.data.pca@last.rank)
+
+# re-order the loadings according to this order 
+orderedLoadings<-dataPredictors.Loadings[,order(PCA.rank)]
+# re-order the coefficients from the linear model with factors as predictors according to this order 
+orderedCoefficientsPCA<-linModPCA$coefficients[-1][order(PCA.rank)]
+
+# multiply the ordered loading matrix by the vector of order coefficients to get the slopes of the original predictors 
+restoredCoefficients<-orderedLoadings%*%orderedCoefficientsPCA
+cbind(restoredCoefficients,linMod$coefficients[-1])
+```
+
